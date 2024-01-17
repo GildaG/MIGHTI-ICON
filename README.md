@@ -1,0 +1,2 @@
+# MIGHTI-ICON
+Plots MIGHT data
