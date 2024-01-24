@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from datetime import datetime
 from netCDF4 import Dataset
+import matplotlib.dates as mdates
+
 
 # Date range
 start_date = pd.to_datetime('2021-10-11')
@@ -151,6 +153,13 @@ for ax in axs:
     ax.set_ylabel('Altitude (km)', fontsize=AXIS_LABEL_FONT_SIZE)
     ax.tick_params(axis='both', which='major', labelsize=TICK_LABEL_FONT_SIZE)
     add_lts_legend(ax)
+    
+for ax in axs:
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d %H'))  # Includes the hour
+    ax.grid(True)
+
+plt.gcf().autofmt_xdate()     
+    
 
 # Adding a title for the entire plot
 fig.suptitle(f'ICON L22 Wind Data between -20 and 20 Mag Lat', fontsize=TITLE_FONT_SIZE, y=0.95)
