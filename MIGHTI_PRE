@@ -1,0 +1,184 @@
+import os
+import glob
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+from datetime import datetime
+from netCDF4 import Dataset
+from matplotlib.lines import Line2D
+import matplotlib.dates as mdates
+
+
+# Date range
+start_date = pd.to_datetime('2021-10-11')
+end_date = pd.to_datetime('2021-10-14')
+
+# Font size configuration
+TITLE_FONT_SIZE = 16
+AXIS_LABEL_FONT_SIZE = 16
+TICK_LABEL_FONT_SIZE = 16
+COLORBAR_TITLE_FONT_SIZE = 18
+LEGEND_FONT_SIZE = 15
+
+# Conversion function for Local Solar Time from decimal to hh:mm
+def decimal_to_hhmm(decimal_time):
+    hours = int(decimal_time)
+    minutes = int((decimal_time - hours) * 60)
+    return f"{hours:02d}:{minutes:02d}"
+
+# Initialize lists to store data for the specified date range
+all_meridional_wind = []
+all_zonal_wind = []
+all_utc_time = []
+all_local_solar_time = []
+all_altitude = []
+all_longitude = []
+
+# Loop through each day of the date range
+for single_date in pd.date_range(start_date, end_date):
+    year = single_date.year
+    month = single_date.month
+    day = single_date.day
+
+    pattern = f"/Users/gildagonzalez/Documents/Datos/ICON DATA/MIGHTI/Red line/{year}/icon_l2-2_mighti_vector-wind-red_{year}{month:02d}{day:02d}_v05r*.nc"
+    files = glob.glob(pattern)
+
+    if not files:
+        print(f"No file found for {year}-{month:02d}-{day:02d}")
+        continue
+
+    filename = files[0]
+
+    try:
+        with Dataset(filename, 'r') as nc:
+            meridional_wind = nc.variables['ICON_L22_Meridional_Wind'][:]
+            zonal_wind = nc.variables['ICON_L22_Zonal_Wind'][:]
+            longitude = nc.variables['ICON_L22_Longitude'][:]
+            utc_time = nc.variables['ICON_L22_UTC_Time'][:]
+            local_solar_time = nc.variables['ICON_L22_Local_Solar_Time'][:]
+            altitude = nc.variables['ICON_L22_Altitude'][:]
+            wind_quality = nc.variables['ICON_L22_Wind_Quality'][:]
+            magnetic_latitude = nc.variables['ICON_L22_Magnetic_Latitude'][:]
+
+            utc_time = [datetime.strptime(time, "%Y-%m-%d %H:%M:%S.%fZ") for time in utc_time]
+
+            # Apply the mask to the local solar time data
+            fill_value = 9.96920997e+36  # Replace with the actual fill value from your data attributes
+            valid_data_mask = local_solar_time != fill_value
+            local_solar_time = np.ma.masked_where(~valid_data_mask, local_solar_time)
+
+            # Adjust the Local Solar Time filter for wrapping around midnight
+            lst_min = 17.50
+            lst_max = 19.01
+            filter_indices = np.where(
+                (local_solar_time >= lst_min) & (local_solar_time < lst_max) &
+                (wind_quality == 1) &
+                (magnetic_latitude >= -20) & (magnetic_latitude <= 20) &
+                valid_data_mask
+            )
+
+            # Check if altitude is 1D and repeat it to match the other arrays' size if necessary
+            if len(altitude.shape) == 1:
+                altitude = np.tile(altitude, (len(utc_time), 1))
+
+            # Append filtered data to the lists
+            all_meridional_wind.extend(meridional_wind[filter_indices])
+            all_zonal_wind.extend(zonal_wind[filter_indices])
+            all_utc_time.extend(np.array(utc_time)[filter_indices[0]])
+            all_local_solar_time.extend(local_solar_time[filter_indices])
+            all_altitude.extend(altitude[filter_indices])
+            all_longitude.extend(longitude[filter_indices])  # Add longitude data to the list
+    except Exception as e:
+        print(f"An error occurred while processing {filename}: {e}")
+
+# Convert lists to numpy arrays for plotting
+all_meridional_wind = np.array(all_meridional_wind)
+all_zonal_wind = np.array(all_zonal_wind)
+all_utc_time = np.array(all_utc_time)
+all_local_solar_time = np.array(all_local_solar_time)
+all_altitude = np.array(all_altitude)
+all_longitude = np.array(all_longitude)  
+
+
+print("First 5 Data Points:")
+print("UTC Time:", all_utc_time[:5])
+print("Longitude:", all_longitude[:5])
+print("Meridional Wind (m/s):", all_meridional_wind[:5])
+print("Zonal Wind (m/s):", all_zonal_wind[:5])
+print("Altitude (km):", all_altitude[:5])
+
+# You can also format it for better readability
+print("\nFormatted First 30 Data Points:")
+for i in range(30):
+    print(f"Point {i+1}: UTC Time - {all_utc_time[i]}, Longitude - {all_longitude[i]:.2f}, "
+          f"Meridional Wind - {all_meridional_wind[i]:.2f} m/s, "
+          f"Zonal Wind - {all_zonal_wind[i]:.2f} m/s, Altitude - {all_altitude[i]:.2f} km")
+
+
+# After filtering and before plotting, convert the min and max LST values to hh:mm format to debug
+min_lst_hhmm = decimal_to_hhmm(np.min(all_local_solar_time))
+max_lst_hhmm = decimal_to_hhmm(np.max(all_local_solar_time))
+print("Debugging LST values in hh:mm format:")
+print("Min LST in data:", min_lst_hhmm)
+print("Max LST in data:", max_lst_hhmm)
+
+# Creating stacked plots for both wind types
+fig, axs = plt.subplots(2, 1, figsize=(12, 12), sharex=True)
+
+# Calculate the minimum and maximum LST in hh:mm format
+min_lst_hhmm = decimal_to_hhmm(np.min(all_local_solar_time))
+max_lst_hhmm = decimal_to_hhmm(np.max(all_local_solar_time))
+
+# Plotting Meridional Wind
+sc_meridional = axs[0].scatter(all_utc_time, all_altitude, c=all_meridional_wind, cmap='jet', marker=",")
+axs[0].set_ylabel('Altitude (km)', fontsize=AXIS_LABEL_FONT_SIZE)
+cbar_meridional = plt.colorbar(sc_meridional, ax=axs[0])
+cbar_meridional.ax.tick_params(labelsize=TICK_LABEL_FONT_SIZE)
+cbar_meridional.set_label('Meridional Wind (m/s)', fontsize=COLORBAR_TITLE_FONT_SIZE)
+
+# Plotting Zonal Wind
+sc_zonal = axs[1].scatter(all_utc_time, all_altitude, c=all_zonal_wind, cmap='jet', marker=",")
+axs[1].set_ylabel('Altitude (km)', fontsize=AXIS_LABEL_FONT_SIZE)
+cbar_zonal = plt.colorbar(sc_zonal, ax=axs[1])
+cbar_zonal.ax.tick_params(labelsize=TICK_LABEL_FONT_SIZE)
+cbar_zonal.set_label('Zonal Wind (m/s)', fontsize=COLORBAR_TITLE_FONT_SIZE)
+
+# Apply font sizes to axes labels, tick labels for both subplots
+for ax in axs:
+    ax.tick_params(axis='both', which='major', labelsize=TICK_LABEL_FONT_SIZE)
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d %H'))  # Set the x-axis to show both date and hour
+
+# Set the xlabel for the bottom subplot (primary x-axis)
+axs[-1].set_xlabel('DATE (UT)', fontsize=AXIS_LABEL_FONT_SIZE)
+
+# Adding a title for the entire plot with the SLT range
+fig.suptitle(f'ICON L22 Wind Data between -20 and 20 Mag Lat\nSLT Range: {min_lst_hhmm}-{max_lst_hhmm}', fontsize=TITLE_FONT_SIZE, y=0.99)
+
+# Add a secondary x-axis for longitude to the upper subplot
+ax2 = axs[0].twiny()  # Create a new axes object that shares the x-axis with axs[0]
+ax2.set_xlim(axs[0].get_xlim())
+
+# Calculate the positions for the longitude ticks so that they match the primary x-axis
+num_primary_ticks = len(axs[0].get_xticks())
+num_longitude_labels = min(num_primary_ticks, len(all_longitude))
+
+# Ensure we are selecting the correct number of longitude values
+selected_indices = np.linspace(0, len(all_longitude) - 1, num_longitude_labels, dtype=int)
+selected_longitudes = all_longitude[selected_indices]
+
+# Set the ticks and labels for the secondary x-axis
+ax2.set_xticks(axs[0].get_xticks()[:num_longitude_labels])  # Use the same x-ticks as the primary axis
+ax2.set_xticklabels([f'{lon:.2f}' for lon in selected_longitudes], fontsize=TICK_LABEL_FONT_SIZE)  # Set the longitude labels
+
+# Set the xlabel for the upper subplot (secondary x-axis)
+ax2.set_xlabel('Longitude', fontsize=AXIS_LABEL_FONT_SIZE)
+
+plt.gcf().autofmt_xdate()  # Auto-format the date labels to prevent overlap
+
+# Update the figure layout to account for the new axes and labels
+plt.tight_layout()
+
+# Save and show the plot
+plt.savefig(f'/Users/gildagonzalez/Documents/Datos/STD/PRE/Oct2021/Winds_{year}-{month:02d}_postsunset.png')
+plt.show()
