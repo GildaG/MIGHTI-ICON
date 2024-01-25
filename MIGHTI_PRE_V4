@@ -130,16 +130,18 @@ fig, axs = plt.subplots(2, 1, figsize=(12, 12), sharex=True)
 min_lst_hhmm = decimal_to_hhmm(np.min(all_local_solar_time))
 max_lst_hhmm = decimal_to_hhmm(np.max(all_local_solar_time))
 
-# Plotting Meridional Wind
+# Plotting Meridional Wind with grid
 sc_meridional = axs[0].scatter(all_utc_time, all_altitude, c=all_meridional_wind, cmap='jet', marker=",")
 axs[0].set_ylabel('Altitude (km)', fontsize=AXIS_LABEL_FONT_SIZE)
+axs[0].grid(True, which='both', linestyle='--', linewidth=0.5)  # Enable grid
 cbar_meridional = plt.colorbar(sc_meridional, ax=axs[0])
 cbar_meridional.ax.tick_params(labelsize=TICK_LABEL_FONT_SIZE)
 cbar_meridional.set_label('Meridional Wind (m/s)', fontsize=COLORBAR_TITLE_FONT_SIZE)
 
-# Plotting Zonal Wind
+# Plotting Zonal Wind with grid
 sc_zonal = axs[1].scatter(all_utc_time, all_altitude, c=all_zonal_wind, cmap='jet', marker=",")
 axs[1].set_ylabel('Altitude (km)', fontsize=AXIS_LABEL_FONT_SIZE)
+axs[1].grid(True, which='both', linestyle='--', linewidth=0.5)  # Enable grid
 cbar_zonal = plt.colorbar(sc_zonal, ax=axs[1])
 cbar_zonal.ax.tick_params(labelsize=TICK_LABEL_FONT_SIZE)
 cbar_zonal.set_label('Zonal Wind (m/s)', fontsize=COLORBAR_TITLE_FONT_SIZE)
